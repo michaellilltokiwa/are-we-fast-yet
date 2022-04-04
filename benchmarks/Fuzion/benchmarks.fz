@@ -1,0 +1,147 @@
+benchmarks =>
+
+###
+# Storage
+###
+  # ported from https://github.com/smarr/are-we-fast-yet/blob/master/benchmarks/Java/src/Storage.java
+  storage =>
+
+    store(data array<store>|array<nil>) is
+
+    count := 0
+
+    buildTreeDepth (depth i32) =>
+      set count := count + 1
+      if depth.isOne
+        store (array<nil> ((random.next_i32 10) + 1) (i -> nil))
+      else
+        store (array<store> 4 (i -> buildTreeDepth (depth - 1)))
+
+    buildTreeDepth 7
+
+    if count != 5461
+      fuzion.std.panic "result incorrect"
+
+###
+# Towers
+###
+  # ported from https://github.com/smarr/are-we-fast-yet/blob/master/benchmarks/Java/src/Towers.java
+  towers is
+    towersdisk(size i32, next towersdisk|nil) ref is
+
+    piles := marray<towersdisk|nil>(3, nil)
+    movesDone := 0
+
+    pushDisk(disk towersdisk, pile i32)
+      pre
+        match piles[pile]
+          nil => true
+          top towersdisk =>
+            top.size > disk.size
+      =>
+      piles[pile] := towersdisk disk.size piles[pile]
+
+    buildTowerAt(pile i32, disks i32) =>
+      for i in -disks..0 do
+        pushDisk (towersdisk -i nil) pile
+
+    popDiskFrom(pile i32) towersdisk is
+      match piles[pile]
+        nil => fuzion.std.panic "attempting to pop from empty pile"
+        top towersdisk =>
+          piles[pile] := top.next
+          top
+
+    moveTopDisk(from i32, to i32) =>
+      pushDisk (popDiskFrom from) to
+      set movesDone := movesDone + 1
+
+    moveDisks(disks i32, from i32, to i32) unit is
+      if disks == 1
+        moveTopDisk from to
+      else
+        other := 3 - from - to
+        moveDisks (disks - 1) from other
+        moveTopDisk from to
+        moveDisks (disks - 1) other to
+
+    benchmark =>
+      buildTowerAt 0 13
+      moveDisks 13 0 1
+
+    benchmark
+
+    if movesDone != 8191
+      fuzion.std.panic "result incorrect"
+
+###
+# Permute
+###
+  # ported from https://github.com/smarr/are-we-fast-yet/blob/master/benchmarks/Java/src/Permute.java
+  permute =>
+    count := 0
+    marr := marray<i32> 6 0
+
+    swap(i i32, j i32)
+      # pre i != j
+      is
+      tmp := marr[i]
+      marr[i] := marr[j]
+      marr[j] := tmp
+
+    permute(n i32) is
+      set count := count + 1
+      if !n.isZero
+        n1 := n - 1
+        permute n1
+        for i in (-n1..0) do
+          swap n1 -i
+          permute n1
+          swap n1 -i
+
+    permute 6
+
+    if count != 8660
+      fuzion.std.panic "result incorrect"
+
+###
+# Main program
+###
+
+  name := envir.args.drop(1).first
+  iterations := envir.args.drop(2).first.parseI32.val
+  inner_iterations := envir.args.drop(3).first.parseI32.val
+
+  start := fuzion.std.nano_time
+
+  if name = "Permute"
+    for i in 1..iterations do
+      inner_start := fuzion.std.nano_time
+      for j in 1..inner_iterations do
+        permute
+      say "$name: iterations=1 runtime: {round_down((fuzion.std.nano_time - inner_start).as_f64 / 1E3)}us"
+  else if name = "Towers"
+    for i in 1..iterations do
+      inner_start := fuzion.std.nano_time
+      for j in 1..inner_iterations do
+        towers
+      say "$name: iterations=1 runtime: {round_down((fuzion.std.nano_time - inner_start).as_f64 / 1E3)}us"
+  else if name = "Storage"
+    for i in 1..iterations do
+      inner_start := fuzion.std.nano_time
+      for j in 1..inner_iterations do
+        storage
+      say "$name: iterations=1 runtime: {round_down((fuzion.std.nano_time - inner_start).as_f64 / 1E3)}us"
+  else
+    fuzion.std.panic "NYI"
+
+  total := (fuzion.std.nano_time - start).as_f64 / 1E3
+
+  round_down(num f64) =>
+    ("$num".split ".").first
+
+  say "$name: iterations=$iterations average: {round_down(total / iterations.as_f64)}us total: {round_down(total)}us"
+  say
+  say
+  say "Total Runtime: {round_down(total)}us"
+
