@@ -51,3 +51,6 @@ __pycache__
 /report/*.png
 /benchmarks/Java/*.xml
 .Rproj.user
+benchmarks/Fuzion/benchmarks
+benchmarks/Fuzion/benchmarks.c
+build.log
